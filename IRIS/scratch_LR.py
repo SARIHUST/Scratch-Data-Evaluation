@@ -1,6 +1,7 @@
 '''
-    This script is to test the decision boundary of Logistic Regression
-    by using the dataset sklearn.datasets.iris
+    This script is to test if the distance of a data point to the decision boundary of a
+    Logistic Regression classfier is related to the value of the data point by using the 
+    mini-dataset sklearn.datasets.iris
 '''
 
 import numpy as np
@@ -17,10 +18,10 @@ iris = datasets.load_iris()
 
 X = iris.data[iris.target < 2]
 y = iris.target[iris.target < 2]
-# X = X[y < 2, :2]    # turn it to a 2d problem
-# y = y[y < 2]
 
 # show the data points of the first 2 types on the first 2 features
+# X = X[y < 2, :2]
+# y = y[y < 2]
 # plt.scatter(X[y == 0, 0], X[y == 0, 1], c='b', marker='o')
 # plt.scatter(X[y == 1, 0], X[y == 1, 1], c='r', marker='x')
 # plt.xlabel(iris.feature_names[0])
@@ -67,14 +68,17 @@ for i in range(len(X_train)):
     # assume that a data point should have positive value, then the loss should come down
 
 print(loo_loss)
-print(loo_values)
+print(loo_values)   # every data point's value is 0.0 under this method
 
 # Shapley Values with Monte-Carlo methods
-svs, rs = shapley_values(X_train, y_train, X_test, y_test)
-print(svs)
+# svs, sv_it = shapley_values(X_train, y_train, X_test, y_test, max_p=150)
+# np.save('IRIS/svs', svs)
+# np.save('IRIS/sv_it', sv_it)
+
+svs = np.load('IRIS/svs.npy')   # use the saved data to jump pass shapley values computing
+sv_it = np.load('IRIS/sv_it.npy')
 
 idx = np.arange(1, len(X_train) + 1)
-# plt.scatter(idx, loo_values, c='b', marker='o')
 s0 = plt.scatter(idx[y_train==0], svs[y_train==0], c='r', marker='x')
 s1 = plt.scatter(idx[y_train==1], svs[y_train==1], c='b', marker='o')
 plt.xlabel('data points')
@@ -83,10 +87,12 @@ plt.title('Shapley Values of each data point')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
 
-idx = np.arange(1, len(rs) + 1)
-plt.plot(idx, rs)
+# show the change of shapley value against the number of iterations
+idx = np.arange(1, len(sv_it) + 1)
+plt.plot(idx, sv_it)
+plt.xlabel('iterations')
+plt.ylabel('shapley value')
 plt.show()
-exit()
 
 # Compute the distance of the training data points to the decision boundary
 w = LRClassifier.coef_
@@ -95,6 +101,7 @@ b = LRClassifier.intercept_
 dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
 dist /= np.linalg.norm(w)
 print(dist)
+idx = np.arange(1, len(dist) + 1)
 s0 = plt.scatter(idx[y_train==0], dist[y_train==0], c='r', marker='x')
 s1 = plt.scatter(idx[y_train==1], dist[y_train==1], c='b', marker='o')
 plt.xlabel('data points')
@@ -102,3 +109,53 @@ plt.ylabel('distance')
 plt.title('Distance of each data point to the hyper-plane')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
+
+# compare the 2 methods
+
+svs_ = svs / sum(svs) * 250
+dist_ = dist / sum(dist) * 100
+s0 = plt.scatter(idx, svs_, c='r', marker='x')
+plt.plot(idx, svs_)
+s1 = plt.scatter(idx, dist_, c='b', marker='o')
+plt.plot(idx, dist_)
+plt.xlabel('data points')
+plt.ylabel('proportion\' to total')
+plt.title('shapley value vs distance to border')
+plt.legend(handles=[s0, s1], labels=['sv', 'dist'])
+plt.show()
+
+# Consider the impact of a data point on the decision boundary when removed from training
+# LOO distance change:
+loo_dist = np.zeros(len(X_train))
+for i in range(len(X_train)):
+    x = X_train[i]
+    X_ = np.vstack((X_train[:i], X_train[i + 1:]))
+    y_ = np.hstack((y_train[:i], y_train[i + 1:]))
+    LR = LogisticRegression()
+    LR.fit(X_, y_)
+    w = LR.coef_
+    b = LR.intercept_
+    dist_i = abs(np.dot(w, x) + b)
+    dist_i /= np.linalg.norm(w)
+    loo_dist[i] = abs(dist[i] - dist_i)
+
+print(loo_dist)
+
+s0 = plt.scatter(idx, loo_dist, c='r', marker='x')
+plt.xlabel('data points')
+plt.ylabel('delta distance')
+plt.title('Delta distance by LOO strategy')
+plt.show()
+
+loo_dist_ = loo_dist / sum(loo_dist) * 30
+s0 = plt.scatter(idx, svs_, c='r', marker='x')
+plt.plot(idx, svs_)
+s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+plt.plot(idx, loo_dist_)
+plt.xlabel('data points')
+plt.ylabel('proportion\' to total')
+plt.title('shapley value vs delta distance')
+plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
+plt.show()
+
+# shapley distance change

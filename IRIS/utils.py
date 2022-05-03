@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 
-def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='loss'):
+def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='loss', max_p=3):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
@@ -27,7 +27,7 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='los
 
     record_1 = [0]
        
-    while t < 3 * n:
+    while t < max_p * n:
         old_phais = phais.copy()
         t += 1
         vs = np.zeros(n + 1)
@@ -49,9 +49,8 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='los
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
 
         record_1.append(phais[1])
-        # if t % 100 == 0:
-        #     print(sum(abs(old_phais - phais) < 1e-4))
+        if t > n and sum(abs(old_phais - phais) < 1e-3) == n:
+            break
 
-    print(sum(abs(old_phais - phais) < 1e-5))
-
+    print(sum(abs(old_phais - phais) < 1e-3))
     return phais, np.array(record_1)
