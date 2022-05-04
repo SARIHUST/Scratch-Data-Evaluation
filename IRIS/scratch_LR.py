@@ -158,4 +158,17 @@ plt.title('shapley value vs delta distance')
 plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
 plt.show()
 
-# shapley distance change
+dist_ = dist / sum(dist) * 100
+loo_dist_ = loo_dist / sum(loo_dist) * 100
+# s0 = plt.scatter(idx, dist_, c='r', marker='x')
+s0 = plt.plot(idx, dist_)
+# s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+s1 = plt.plot(idx, loo_dist_)
+plt.xlabel('data points')
+plt.ylabel('proportion\' to total')
+plt.title('distance vs delta distance')
+plt.legend(handles=[s0, s1], labels=['dist', 'delta dist'])
+plt.show()
+# This figure shows that the data points that are closer to the decision boundary has an impact
+# on the boundary that is larger than those that are further. However when considered with the 
+# shapley value, no relationship can be seen directly.

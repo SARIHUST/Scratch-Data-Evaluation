@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-show_num = 100
+show_num = 20
 
 svs = np.load('MNIST/calculation/shapley-values.npy')
 dist = np.load('MNIST/calculation/distance.npy')
@@ -24,8 +24,10 @@ dists = dists / sum(dists) * 100
 idx = np.arange(1, show_num + 1)
 s1 = plt.scatter(idx[dist[1] == dist[0]], svs[dist[1] == dist[0]], c='r', marker='x')
 s2 = plt.scatter(idx[dist[1] != dist[0]], svs[dist[1] != dist[0]], c='b', marker='x')
+plt.plot(idx, svs)
 s3 = plt.scatter(idx[dist[1] == dist[0]], dists[dist[1] == dist[0]], c='r', marker='o')
 s4 = plt.scatter(idx[dist[1] != dist[0]], dists[dist[1] != dist[0]], c='b', marker='o')
+plt.plot(idx, dists)
 plt.xlabel('data points')
 plt.ylabel('proportion to total')
 plt.title('Shapley Value vs Distance to border')
