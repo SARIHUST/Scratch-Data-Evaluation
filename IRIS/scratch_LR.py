@@ -160,10 +160,10 @@ plt.show()
 
 dist_ = dist / sum(dist) * 100
 loo_dist_ = loo_dist / sum(loo_dist) * 100
-# s0 = plt.scatter(idx, dist_, c='r', marker='x')
-s0 = plt.plot(idx, dist_)
-# s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
-s1 = plt.plot(idx, loo_dist_)
+s0 = plt.scatter(idx, dist_, c='r', marker='x')
+plt.plot(idx, dist_)
+s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+plt.plot(idx, loo_dist_)
 plt.xlabel('data points')
 plt.ylabel('proportion\' to total')
 plt.title('distance vs delta distance')

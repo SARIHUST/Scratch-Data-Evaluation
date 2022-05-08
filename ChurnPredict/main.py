@@ -26,31 +26,105 @@ y_predict = LRPCA.predict(X_test)
 print(accuracy_score(y_test, y_predict))
 print(log_loss(y_test, y_predict))
 
-# figure the values of each data point
-num = 400
-idx = np.arange(1, num + 1)
+# compute the distance
+show_num = 100
+calc_num = len(X_train)
+# calc_num = 500
 
 w = LRPCA.coef_
 b = LRPCA.intercept_
-dist = np.array([abs(np.dot(w, X_train[i]) + b) for i in range(num)])
+dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
 dist /= np.linalg.norm(w)
 
-s0 = plt.scatter(idx[y_train[:num]==0], dist[y_train[:num]==0], c='r', marker='x')
-s1 = plt.scatter(idx[y_train[:num]==1], dist[y_train[:num]==1], c='b', marker='o')
+idx = np.arange(1, show_num + 1)
+s0 = plt.scatter(idx[y_train[:show_num]==0], dist[:show_num][y_train[:show_num]==0], c='r', marker='x')
+s1 = plt.scatter(idx[y_train[:show_num]==1], dist[:show_num][y_train[:show_num]==1], c='b', marker='o')
 plt.xlabel('data points')
 plt.ylabel('distance')
 plt.title('Distance of each data point to the hyper-plane')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
 
-# under the pca data, do compute the SV for all the data points needs about 2 days, 
-# so this can only be done on less data points, or turn to data groups
-svs = shapley_values(X_train[:num], y_train[:num], X_test, y_test, evaluate='loss')
+# compute shapley values
+# svs, sv_it = shapley_values(X_train[:calc_num], y_train[:calc_num], X_test, y_test, evaluate='loss', max_p=10)
+# np.save('ChurnPredict/svs_{}'.format(calc_num), svs)
+# np.save('ChurnPredict/sv_it_{}'.format(calc_num), sv_it)
 
-s0 = plt.scatter(idx[y_train[:num]==0], svs[y_train[:num]==0], c='r', marker='x')
-s1 = plt.scatter(idx[y_train[:num]==1], svs[y_train[:num]==1], c='b', marker='o')
+svs = np.load('ChurnPredict/svs_{}.npy'.format(calc_num))[:show_num]
+sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(calc_num))
+
+s0 = plt.scatter(idx[y_train[:show_num]==0], svs[y_train[:show_num]==0], c='r', marker='x')
+s1 = plt.scatter(idx[y_train[:show_num]==1], svs[y_train[:show_num]==1], c='b', marker='o')
 plt.xlabel('data points')
 plt.ylabel('shapley value')
 plt.title('Shapley Values of each data point')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
+plt.show()
+
+idx_it = np.arange(1, len(sv_it) + 1)
+plt.plot(idx_it, sv_it)
+plt.xlabel('iterations')
+plt.ylabel('shapley value')
+plt.show()
+
+# compare shapley value and distance
+svs_ = svs / sum(svs) * 50
+dist_ = dist[:show_num] / sum(dist[:show_num]) * 100 + 2.5
+s0 = plt.scatter(idx, svs_, c='r', marker='x')
+plt.plot(idx, svs_)
+s1 = plt.scatter(idx, dist_, c='b', marker='o')
+plt.plot(idx, dist_)
+plt.xlabel('data points')
+plt.title('shapley value vs distance to border')
+plt.legend(handles=[s0, s1], labels=['sv', 'dist'])
+plt.show()
+
+# compute LOO distance change
+# loo_dist = np.zeros(len(X_train))
+# for i in range(len(X_train)):
+#     if i % 100 == 0:
+#         print('computing on {}'.format(i))
+#     x = X_train[i]
+#     X_ = np.vstack((X_train[:i], X_train[i + 1:]))
+#     y_ = np.hstack((y_train[:i], y_train[i + 1:]))
+#     LR = LogisticRegression()
+#     LR.fit(X_, y_)
+#     w = LR.coef_
+#     b = LR.intercept_
+#     dist_i = abs(np.dot(w, x) + b)
+#     dist_i /= np.linalg.norm(w)
+#     loo_dist[i] = abs(dist[i] - dist_i)
+
+# np.save('ChurnPredict/delta_dist', loo_dist)
+loo_dist = np.load('ChurnPredict/delta_dist.npy')
+
+# show delta distance
+s0 = plt.scatter(idx, loo_dist[:show_num], c='r', marker='x')
+plt.xlabel('data points')
+plt.ylabel('delta distance')
+plt.title('Delta distance by LOO strategy')
+plt.show()
+
+# compare distance and delta distance
+dist_ = dist[:show_num] / sum(dist[:show_num]) * 50
+loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 1.5
+s0 = plt.scatter(idx, dist_, c='r', marker='x')
+plt.plot(idx, dist_[:show_num])
+s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+plt.plot(idx, loo_dist_[:show_num])
+plt.xlabel('data points')
+plt.title('distance vs delta distance')
+plt.legend(handles=[s0, s1], labels=['dist', 'delta dist'])
+plt.show()
+
+# compare shapley value and delta distance
+svs_ = svs / sum(svs) * 50
+loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 2.5
+s0 = plt.scatter(idx, svs_, c='r', marker='x')
+plt.plot(idx, svs_)
+s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+plt.plot(idx, loo_dist_[:show_num])
+plt.xlabel('data points')
+plt.title('shapley value vs delta distance')
+plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
 plt.show()

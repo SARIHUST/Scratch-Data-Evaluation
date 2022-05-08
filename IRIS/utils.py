@@ -2,11 +2,13 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 
+seed = 423
+np.random.seed(seed)
+
 def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='loss', max_p=3):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
-    np.random.seed(423)
     X_0s, X_1s = X_train[y_train==0], X_train[y_train==1]
     X_mean_0, X_mean_1 = np.mean(X_0s, axis=0), np.mean(X_1s, axis=0)
     n = len(X_train)
