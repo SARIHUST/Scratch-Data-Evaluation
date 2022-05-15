@@ -1,6 +1,8 @@
 from time import time
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 from torchvision.datasets import MNIST
@@ -66,7 +68,7 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
                 w = w_i
         # compute the total perturbation at this round
         pert = pert.detach().numpy()
-        rx = (pert + 1e-4) * w / np.linalg.norm(w)
+        rx = (pert + 1e-5) * w / np.linalg.norm(w)
         r += rx.squeeze(0)
         # compute the new image
         img_pert = (img + (1 + overshoot) * torch.from_numpy(r)).to(device)
@@ -92,7 +94,6 @@ class MyMNIST(MNIST):
             type_size: the number of data points you want for each type
         '''
         idx = list(range(len(self.targets)))
-        # np.random.seed(12345)
         trunc_idx = []
         for ci in classes:
             ci_idx = [i for i in idx if self.targets[i] == ci]
@@ -107,17 +108,17 @@ class MyMNIST(MNIST):
         self.data = self.data[trunc_idx]
         self.targets = self.targets[trunc_idx]
 
-def train(net, train_dataset):
+def train(model, k, train_dataset, nan=False):
     train_loader = DataLoader(train_dataset, 128)
-    optimizer = torch.optim.SGD(net.parameters(), lr=2e-3, momentum=0.5)
-    # optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
-    epochs = 4
+    epochs = 5
     loss_fn = torch.nn.CrossEntropyLoss()
-    net = net.to(device)
+    net = model(k).to(device)
+    optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.5)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=1e-5)
     for i in range(epochs):
         # print('epoch {} starts'.format(i))
         net.train()
-        # total_train_accurate = 0
+        total_train_accurate = 0
         for data in train_loader:
             inputs, targets = data
             inputs = inputs.to(device)
@@ -126,17 +127,20 @@ def train(net, train_dataset):
                 inputs = inputs.unsqueeze(1)
             outputs = net(inputs)
             loss = loss_fn(outputs, targets)
-            # accurate = sum(torch.argmax(outputs, 1) == targets)
-            # total_train_accurate += accurate
+            accurate = sum(torch.argmax(outputs, 1) == targets)
+            total_train_accurate += accurate
             # optimize the network
             optimizer.zero_grad()
             loss.backward() # back propagation
             optimizer.step()
-        # print('total tarin accuracy: {}'.format(total_train_accurate / len(train_dataset)))
+        if nan:
+            print('total tarin accuracy: {}'.format(total_train_accurate / len(train_dataset)))
     return net
 
-def predict(net, test_dataset):
+def predict(net, test_dataset, nan=False):
     test_loader = DataLoader(test_dataset, len(test_dataset))
+    if nan:
+        test_loader = DataLoader(test_dataset, 1)
     net.eval()
     for data in test_loader:
         inputs, _ = data
@@ -144,32 +148,37 @@ def predict(net, test_dataset):
         outputs = net(inputs)
     return outputs
 
-def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8):
+def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8, max_p=2):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
-    # np.random.seed(423)
     n = len(train_dataset)
     phais = np.zeros(n)
     t = 0
-    net = model(classes=k)
-    fnet = train(net, train_dataset)
+    fnet = train(model, k, train_dataset, True)
     outputs = predict(fnet, test_dataset)
-    total_score = -log_loss(test_dataset.targets, outputs.detach().cpu().numpy())
-    outputs_orig = np.zeros(outputs.shape)
-    for i in range(len(outputs)):
-        outputs_orig[i][0] = 1
-    orig_score = -log_loss(test_dataset.targets, outputs_orig)
-    y_predict = torch.argmax(outputs, 1).detach().cpu().numpy()
+    outputs_orig = torch.randn(outputs.shape)
+    # use loss as score
+    # loss_fn = nn.CrossEntropyLoss()
+    # total_score = -loss_fn(outputs, test_dataset.targets)
+    # orig_score = -loss_fn(outputs_orig, test_dataset.targets)
+
+    # use accuracy as score
+    orig_predict = torch.argmax(F.softmax(outputs_orig, dim=1), dim=1).detach().cpu().numpy()
+    y_predict = torch.argmax(F.softmax(outputs, dim=1), dim=1).detach().cpu().numpy()
+    total_score = accuracy_score(test_dataset.targets, y_predict)
+    orig_score = accuracy_score(test_dataset.targets, orig_predict)
+
     print('total accuracy: {}'.format(accuracy_score(test_dataset.targets, y_predict)))
     print('total loss: {}'.format(total_score))
+    record_1 = [0]
 
-    while t < 3 * n:
+    while t < max_p * n:
+        old_phais = phais.copy()
         start = time()
         t += 1
         vs = np.zeros(n + 1)
         vs[0] = orig_score
-        # with out training the classifier assigns every data point to label 0
         pai_t = np.random.permutation(np.arange(0, n, step=1))
         trans = torchvision.transforms.Normalize(0.1307, 0.3081)
         for j in range(1, n + 1):
@@ -177,25 +186,27 @@ def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8):
             if total_score - vs[j - 1] <= epsilon:
                 vs[j] = vs[j - 1]
             else:
-                net = model(classes=k)
-                data = trans(train_dataset.data.float()[:j])
+                data = trans(train_dataset.data.float()[pai_t[:j]])
                 label = train_dataset.targets[:j]
                 dataset = TempDataset(data, label)
-                net = train(net, dataset)
+                net = train(model, k, dataset)
                 outputs = predict(net, test_dataset)
-                if outputs[0][0] != outputs[0][0]:
+                while outputs[0][0] != outputs[0][0]:
+                    print(j)
                     print('NaN problem')
-                    print(outputs)
-                    print(dataset.data)
-                    print(dataset.targets)
-                    torch.save(net, 'MNIST/wrong_net.pth')
-                    torch.save(dataset, 'MNIST/wrong_data')
-                    exit()
-                vs[j] = -log_loss(test_dataset.targets, outputs.detach().cpu().numpy())
+                    train(model, k, dataset, True)
+                    outputs = predict(net, test_dataset, True)
+                # vs[j] = -loss_fn(outputs, test_dataset.targets)
+                y_predict = torch.argmax(F.softmax(outputs, dim=1), 1).detach().cpu().numpy()
+                vs[j] = accuracy_score(test_dataset.targets, y_predict)
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
         end = time()
-        print('iteration {}, time spent: {}s'.format(t, end - start))
-    return phais, fnet
+        print('iteration {}, converge {}(remains zero {}), time cost {}'.format(t, sum(abs(old_phais - phais) < 1e-5), sum(phais == 0), end - start))
+        record_1.append(phais[1])
+        if sum(abs(old_phais - phais) < 1e-5) == n and t >= 50:
+            break
+
+    return phais, fnet, record_1
 
 
 if __name__ == '__main__':

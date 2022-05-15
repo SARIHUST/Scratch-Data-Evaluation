@@ -41,7 +41,7 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='los
             if total_score - vs[j - 1] <= epsilon:
                 vs[j] = vs[j - 1]
             else:
-                X_, y_ = X_train[:j], y_train[:j]
+                X_, y_ = X_train[pai_t[:j]], y_train[pai_t[:j]]
                 LR.fit(np.vstack((orig_X, X_)), np.hstack((orig_y, y_)))
                 y_predict = LR.predict(X_test)
                 if evaluate == 'ac':

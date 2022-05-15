@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 seed = 423
 np.random.seed(seed)
 
-def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='ac', max_p=3):
+def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-6, evaluate='ac', max_p=3):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
@@ -46,7 +46,7 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='ac'
             if total_score - vs[j - 1] <= epsilon:
                 vs[j] = vs[j - 1]
             else:
-                X_, y_ = X_train[:j], y_train[:j]
+                X_, y_ = X_train[pai_t[:j]], y_train[pai_t[:j]]
                 LR.fit(np.vstack((orig_X, X_)), np.hstack((orig_y, y_)))
                 y_predict = LR.predict(X_test)
                 if evaluate == 'ac':
@@ -56,11 +56,11 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='ac'
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
 
         record_1.append(phais[1])
-        if sum(abs(old_phais - phais) < 1e-3) == n:
+        if sum(abs(old_phais - phais) < 1e-4) == n:
             break
         if t % 50 == 0:
             end = time.time()
-            print('iteration {}, converge {}, time cost {}'.format(t, sum(abs(old_phais - phais) < 1e-3), end - start))
+            print('iteration {}, converge {}, time cost {}'.format(t, sum(abs(old_phais - phais) < 1e-4), end - start))
 
     print(sum(abs(old_phais - phais) < 1e-3))
     return phais, np.array(record_1)
@@ -143,4 +143,4 @@ def load_churn_data():
     X_train[['tenure', 'MonthlyCharges', 'TotalCharges']] = scaler.transform(X_train[['tenure', 'MonthlyCharges', 'TotalCharges']])
     X_test[['tenure', 'MonthlyCharges', 'TotalCharges']] = scaler.transform(X_test[['tenure', 'MonthlyCharges', 'TotalCharges']])
 
-    return X_train, X_test, y_train, y_test
+    return X_train.values, X_test.values, y_train.values, y_test.values

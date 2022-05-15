@@ -45,7 +45,6 @@ class LeNet(nn.Module):
             nn.Linear(120, 84),
             nn.ReLU(),
             nn.Linear(84, classes),
-            # nn.Softmax(1)
         )
 
     def forward(self, x):

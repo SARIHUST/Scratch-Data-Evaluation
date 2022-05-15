@@ -158,8 +158,8 @@ plt.title('shapley value vs delta distance')
 plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
 plt.show()
 
-dist_ = dist / sum(dist) * 100
-loo_dist_ = loo_dist / sum(loo_dist) * 100
+dist_ = dist / sum(dist) * 10
+loo_dist_ = loo_dist / sum(loo_dist) * 10 + 0.25
 s0 = plt.scatter(idx, dist_, c='r', marker='x')
 plt.plot(idx, dist_)
 s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')

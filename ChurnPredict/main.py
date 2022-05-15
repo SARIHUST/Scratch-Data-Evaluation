@@ -7,7 +7,8 @@ from sklearn.decomposition import PCA
 from utils.utils import shapley_values, load_churn_data
 
 X_train, X_test, y_train, y_test = load_churn_data()
-
+X_train = X_train[:400]
+y_train = y_train[:400]
 # first model using all the features
 LR = LogisticRegression(max_iter=1000)
 LR.fit(X_train, y_train)
@@ -36,6 +37,35 @@ b = LRPCA.intercept_
 dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
 dist /= np.linalg.norm(w)
 
+
+# compute shapley values
+svs, sv_it = shapley_values(X_train[:calc_num], y_train[:calc_num], X_test, y_test, evaluate='loss', max_p=10)
+np.save('ChurnPredict/svs_{}'.format(calc_num), svs)
+np.save('ChurnPredict/sv_it_{}'.format(calc_num), sv_it)
+
+svs = np.load('ChurnPredict/svs_{}.npy'.format(calc_num))[:show_num]
+sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(calc_num))
+
+# compute LOO distance change
+loo_dist = np.zeros(len(X_train))
+for i in range(len(X_train)):
+    if i % 100 == 0:
+        print('computing on {}'.format(i))
+    x = X_train[i]
+    X_ = np.vstack((X_train[:i], X_train[i + 1:]))
+    y_ = np.hstack((y_train[:i], y_train[i + 1:]))
+    LR = LogisticRegression()
+    LR.fit(X_, y_)
+    w = LR.coef_
+    b = LR.intercept_
+    dist_i = abs(np.dot(w, x) + b)
+    dist_i /= np.linalg.norm(w)
+    loo_dist[i] = abs(dist[i] - dist_i)
+
+np.save('ChurnPredict/delta_dist', loo_dist)
+loo_dist = np.load('ChurnPredict/delta_dist.npy')
+
+# show distance
 idx = np.arange(1, show_num + 1)
 s0 = plt.scatter(idx[y_train[:show_num]==0], dist[:show_num][y_train[:show_num]==0], c='r', marker='x')
 s1 = plt.scatter(idx[y_train[:show_num]==1], dist[:show_num][y_train[:show_num]==1], c='b', marker='o')
@@ -45,14 +75,7 @@ plt.title('Distance of each data point to the hyper-plane')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
 
-# compute shapley values
-# svs, sv_it = shapley_values(X_train[:calc_num], y_train[:calc_num], X_test, y_test, evaluate='loss', max_p=10)
-# np.save('ChurnPredict/svs_{}'.format(calc_num), svs)
-# np.save('ChurnPredict/sv_it_{}'.format(calc_num), sv_it)
-
-svs = np.load('ChurnPredict/svs_{}.npy'.format(calc_num))[:show_num]
-sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(calc_num))
-
+# show shapley value
 s0 = plt.scatter(idx[y_train[:show_num]==0], svs[y_train[:show_num]==0], c='r', marker='x')
 s1 = plt.scatter(idx[y_train[:show_num]==1], svs[y_train[:show_num]==1], c='b', marker='o')
 plt.xlabel('data points')
@@ -61,6 +84,7 @@ plt.title('Shapley Values of each data point')
 plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
 
+# show converge
 idx_it = np.arange(1, len(sv_it) + 1)
 plt.plot(idx_it, sv_it)
 plt.xlabel('iterations')
@@ -78,25 +102,6 @@ plt.xlabel('data points')
 plt.title('shapley value vs distance to border')
 plt.legend(handles=[s0, s1], labels=['sv', 'dist'])
 plt.show()
-
-# compute LOO distance change
-# loo_dist = np.zeros(len(X_train))
-# for i in range(len(X_train)):
-#     if i % 100 == 0:
-#         print('computing on {}'.format(i))
-#     x = X_train[i]
-#     X_ = np.vstack((X_train[:i], X_train[i + 1:]))
-#     y_ = np.hstack((y_train[:i], y_train[i + 1:]))
-#     LR = LogisticRegression()
-#     LR.fit(X_, y_)
-#     w = LR.coef_
-#     b = LR.intercept_
-#     dist_i = abs(np.dot(w, x) + b)
-#     dist_i /= np.linalg.norm(w)
-#     loo_dist[i] = abs(dist[i] - dist_i)
-
-# np.save('ChurnPredict/delta_dist', loo_dist)
-loo_dist = np.load('ChurnPredict/delta_dist.npy')
 
 # show delta distance
 s0 = plt.scatter(idx, loo_dist[:show_num], c='r', marker='x')
