@@ -53,8 +53,33 @@ class LeNet(nn.Module):
         x = self.full(x)
         return x
 
+class TryNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Conv2d(1, 8, 3),
+            nn.ReLU(),
+            nn.Conv2d(8, 8, 3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(8, 64, 3),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, 3),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Flatten(),
+            nn.Linear(4 * 4 * 64, 64),
+            nn.ReLU(),
+            nn.Linear(64, 10),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        x = self.network(x)
+        return x
+
 if __name__ == '__main__':
-    net = LeNet()
+    net = TryNet()
     inputs = torch.ones((1, 1, 28, 28))
     print(inputs.shape)
     outputs = net(inputs)

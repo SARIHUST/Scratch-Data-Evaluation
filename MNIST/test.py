@@ -48,11 +48,9 @@ print('predicts t2 to be {}'.format(torch.argmax(output)))
 img = cv2.imread('MNIST/test/t7.png')
 img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 img = transform(img).to(device)
-r, img_pert, lx = deepfool(img, net, 10, overshoot=100, max_iter=1000)
+r, img_pert, lx = deepfool(img, net, 10, overshoot=1e-5, max_iter=1000)
 print(lx)
 print(np.linalg.norm(r.flatten()))
-
-exit()
 
 mean = [0.1307]
 std = [0.3081]

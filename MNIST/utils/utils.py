@@ -8,7 +8,7 @@ import torchvision
 from torchvision.datasets import MNIST
 from zmq import device
 from model import *
-from sklearn.metrics import log_loss, accuracy_score
+from sklearn.metrics import accuracy_score
 
 seed = 423
 torch.manual_seed(seed)
@@ -36,15 +36,15 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     img.to(device)
     net.to(device)
-    p_img = net(torch.tensor(img.unsqueeze(0), requires_grad=True)).detach().numpy()
-    # select the top k possible classes
-    idx = np.array(p_img.flatten()).argsort()[::-1][0:k]
+    p_img = net(img.unsqueeze(0))
+    idx = np.array(F.softmax(p_img.flatten(), dim=0).detach().numpy()).argsort()[::-1][0:k]
 
     label = idx[0]
     img_pert = img.clone().detach()
     w, r = np.zeros(img.shape), np.zeros(img.shape)
     
-    x = torch.tensor(img_pert.unsqueeze(0), requires_grad=True)
+    x = img_pert.unsqueeze(0).float()
+    x.requires_grad = True
     px = net(x)[0]
     lx = label
     it = 0
@@ -60,7 +60,7 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
             i_grad = x.grad.data.numpy().copy()
 
             w_i = i_grad - orig_grad
-            f_i = px[idx[i]] - px[idx[i]]
+            f_i = px[idx[i]] - px[idx[0]]
             pert_i = abs(f_i) / np.linalg.norm(w_i.flatten())
 
             if pert_i < pert:
@@ -68,11 +68,12 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
                 w = w_i
         # compute the total perturbation at this round
         pert = pert.detach().numpy()
-        rx = (pert + 1e-5) * w / np.linalg.norm(w)
+        rx = (pert + 1e-7) * w / np.linalg.norm(w)
         r += rx.squeeze(0)
         # compute the new image
         img_pert = (img + (1 + overshoot) * torch.from_numpy(r)).to(device)
-        x = torch.tensor(img_pert.unsqueeze(0), requires_grad=True, dtype=torch.float32)
+        x = img_pert.unsqueeze(0).float()
+        x.requires_grad = True
         px = net(x)[0]
         # print(px)
         lx = torch.argmax(px)
@@ -110,11 +111,11 @@ class MyMNIST(MNIST):
 
 def train(model, k, train_dataset, nan=False):
     train_loader = DataLoader(train_dataset, 128)
-    epochs = 5
+    epochs = 4
     loss_fn = torch.nn.CrossEntropyLoss()
     net = model(k).to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=5e-3, momentum=0.5)
-    # optimizer = torch.optim.Adam(net.parameters(), lr=1e-5)
+    # optimizer = torch.optim.SGD(net.parameters(), lr=7e-3, momentum=0.5)
+    optimizer = torch.optim.Adam(net.parameters(), lr=5e-5)
     for i in range(epochs):
         # print('epoch {} starts'.format(i))
         net.train()
@@ -148,10 +149,11 @@ def predict(net, test_dataset, nan=False):
         outputs = net(inputs)
     return outputs
 
-def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8, max_p=2):
+def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
+    trans = torchvision.transforms.Normalize(0.1307, 0.3081)
     n = len(train_dataset)
     phais = np.zeros(n)
     t = 0
@@ -159,19 +161,28 @@ def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8, max_p=
     outputs = predict(fnet, test_dataset)
     outputs_orig = torch.randn(outputs.shape)
     # use loss as score
-    # loss_fn = nn.CrossEntropyLoss()
-    # total_score = -loss_fn(outputs, test_dataset.targets)
-    # orig_score = -loss_fn(outputs_orig, test_dataset.targets)
+    loss_fn = nn.CrossEntropyLoss()
+    total_score = -loss_fn(outputs, test_dataset.targets)
+    orig_score = -loss_fn(outputs_orig, test_dataset.targets)
+
+    epsdata = trans(train_dataset.data.float()[:int(n * 0.9)])
+    epstarget = train_dataset.targets[:int(n * 0.9)]
+    epsdataset = TempDataset(epsdata, epstarget)
+    epsnet = train(model, k, epsdataset, True)
+    outputs = predict(epsnet, test_dataset)
+    eps_score = -loss_fn(outputs, test_dataset.targets)
 
     # use accuracy as score
-    orig_predict = torch.argmax(F.softmax(outputs_orig, dim=1), dim=1).detach().cpu().numpy()
+    # orig_predict = torch.argmax(F.softmax(outputs_orig, dim=1), dim=1).detach().cpu().numpy()
     y_predict = torch.argmax(F.softmax(outputs, dim=1), dim=1).detach().cpu().numpy()
-    total_score = accuracy_score(test_dataset.targets, y_predict)
-    orig_score = accuracy_score(test_dataset.targets, orig_predict)
+    # total_score = accuracy_score(test_dataset.targets, y_predict)
+    # orig_score = accuracy_score(test_dataset.targets, orig_predict)
 
     print('total accuracy: {}'.format(accuracy_score(test_dataset.targets, y_predict)))
     print('total loss: {}'.format(total_score))
-    record_1 = [0]
+    epsilon = float(abs(total_score - eps_score)) / 2
+    print('epsilon: {}'.format(epsilon))
+    record = [[0] for _ in range(n)]
 
     while t < max_p * n:
         old_phais = phais.copy()
@@ -180,14 +191,15 @@ def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8, max_p=
         vs = np.zeros(n + 1)
         vs[0] = orig_score
         pai_t = np.random.permutation(np.arange(0, n, step=1))
-        trans = torchvision.transforms.Normalize(0.1307, 0.3081)
         for j in range(1, n + 1):
+            if j % 100 == 0:
+                print(j)
             idx = pai_t[j - 1]
             if total_score - vs[j - 1] <= epsilon:
                 vs[j] = vs[j - 1]
             else:
                 data = trans(train_dataset.data.float()[pai_t[:j]])
-                label = train_dataset.targets[:j]
+                label = train_dataset.targets[pai_t[:j]]
                 dataset = TempDataset(data, label)
                 net = train(model, k, dataset)
                 outputs = predict(net, test_dataset)
@@ -196,17 +208,18 @@ def shapley_values(model, train_dataset, test_dataset, k=3, epsilon=1e-8, max_p=
                     print('NaN problem')
                     train(model, k, dataset, True)
                     outputs = predict(net, test_dataset, True)
-                # vs[j] = -loss_fn(outputs, test_dataset.targets)
-                y_predict = torch.argmax(F.softmax(outputs, dim=1), 1).detach().cpu().numpy()
-                vs[j] = accuracy_score(test_dataset.targets, y_predict)
+                vs[j] = -loss_fn(outputs, test_dataset.targets)
+                # y_predict = torch.argmax(F.softmax(outputs, dim=1), 1).detach().cpu().numpy()
+                # vs[j] = accuracy_score(test_dataset.targets, y_predict)
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
         end = time()
-        print('iteration {}, converge {}(remains zero {}), time cost {}'.format(t, sum(abs(old_phais - phais) < 1e-5), sum(phais == 0), end - start))
-        record_1.append(phais[1])
-        if sum(abs(old_phais - phais) < 1e-5) == n and t >= 50:
+        print('iteration {}, converge {}(remains zero {}), time cost {}'.format(t, sum(abs(old_phais - phais) < epsilon / 30), sum(phais == 0), end - start))
+        for ik in range(n):
+            record[ik].append(phais[ik])
+        if sum(abs(old_phais - phais) < epsilon / 30) - sum(phais == 0) == n:
             break
 
-    return phais, fnet, record_1
+    return phais, fnet, record
 
 
 if __name__ == '__main__':

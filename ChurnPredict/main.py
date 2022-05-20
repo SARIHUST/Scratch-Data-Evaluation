@@ -36,7 +36,7 @@ w = LRPCA.coef_
 b = LRPCA.intercept_
 dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
 dist /= np.linalg.norm(w)
-
+np.save('./ChurnPredict/dist_{}'.format(calc_num), dist)
 
 # compute shapley values
 svs, sv_it = shapley_values(X_train[:calc_num], y_train[:calc_num], X_test, y_test, evaluate='loss', max_p=10)
@@ -62,7 +62,7 @@ for i in range(len(X_train)):
     dist_i /= np.linalg.norm(w)
     loo_dist[i] = abs(dist[i] - dist_i)
 
-np.save('ChurnPredict/delta_dist', loo_dist)
+np.save('ChurnPredict/delta_dist_{}'.format(calc_num), loo_dist)
 loo_dist = np.load('ChurnPredict/delta_dist.npy')
 
 # show distance
