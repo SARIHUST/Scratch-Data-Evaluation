@@ -23,7 +23,6 @@ test_dataset = MyMNIST(root='MNIST/data', train=False, transform=trans, download
 train_size = len(train_dataset)
 test_size = len(test_dataset)
 
-
 train_loader = DataLoader(train_dataset, 128)
 test_loader = DataLoader(test_dataset, 1000)
 
