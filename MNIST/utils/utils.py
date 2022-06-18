@@ -6,7 +6,6 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 from torchvision.datasets import MNIST
-from zmq import device
 from model import *
 from sklearn.metrics import accuracy_score
 
@@ -20,24 +19,12 @@ torch.backends.cudnn.deterministic = True
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class TempDataset(Dataset):
-    def __init__(self, data, targets) -> None:
-        super().__init__()
-        self.data = data
-        self.targets = targets
-        
-    def __getitem__(self, index):
-        return self.data[index], self.targets[index]
-
-    def __len__(self):
-        return len(self.data)
-
 def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     img.to(device)
     net.to(device)
     p_img = net(img.unsqueeze(0))
-    idx = np.array(F.softmax(p_img.flatten(), dim=0).detach().numpy()).argsort()[::-1][0:k]
+    idx = np.array(F.softmax(p_img.flatten(), dim=0).detach().cpu().numpy()).argsort()[::-1][0:k]
 
     label = idx[0]
     img_pert = img.clone().detach()
@@ -51,13 +38,13 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
     while lx == label and it < max_iter:
         pert = np.inf
         px[idx[0]].backward(retain_graph=True)
-        orig_grad = x.grad.data.numpy().copy()
+        orig_grad = x.grad.data.cpu().numpy().copy()
 
         # find the minimum perturbation to change to another label
         for i in range(1, k):
             x.grad = None
             px[idx[i]].backward(retain_graph=True)
-            i_grad = x.grad.data.numpy().copy()
+            i_grad = x.grad.data.cpu().numpy().copy()
 
             w_i = i_grad - orig_grad
             f_i = px[idx[i]] - px[idx[0]]
@@ -67,11 +54,11 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
                 pert = pert_i
                 w = w_i
         # compute the total perturbation at this round
-        pert = pert.detach().numpy()
+        pert = pert.detach().cpu().numpy()
         rx = (pert + 1e-7) * w / np.linalg.norm(w)
         r += rx.squeeze(0)
         # compute the new image
-        img_pert = (img + (1 + overshoot) * torch.from_numpy(r)).to(device)
+        img_pert = (img + (1 + overshoot) * torch.from_numpy(r).to(device))
         x = img_pert.unsqueeze(0).float()
         x.requires_grad = True
         px = net(x)[0]
@@ -82,7 +69,6 @@ def deepfool(img, net, k=10, overshoot=0.02, max_iter=50):
 
     r = (1 + overshoot) * r
     return r, img_pert, lx
-
 
 class MyMNIST(MNIST):
     def __init__(self, root, train=True, transform=None, target_transform=None, download=True):
@@ -111,7 +97,7 @@ class MyMNIST(MNIST):
 
 def train(model, k, train_dataset, nan=False):
     train_loader = DataLoader(train_dataset, 128)
-    epochs = 4
+    epochs = 10
     loss_fn = torch.nn.CrossEntropyLoss()
     net = model(k).to(device)
     # optimizer = torch.optim.SGD(net.parameters(), lr=7e-3, momentum=0.5)
@@ -120,6 +106,7 @@ def train(model, k, train_dataset, nan=False):
         # print('epoch {} starts'.format(i))
         net.train()
         total_train_accurate = 0
+        total_loss = 0
         for data in train_loader:
             inputs, targets = data
             inputs = inputs.to(device)
@@ -130,12 +117,14 @@ def train(model, k, train_dataset, nan=False):
             loss = loss_fn(outputs, targets)
             accurate = sum(torch.argmax(outputs, 1) == targets)
             total_train_accurate += accurate
+            total_loss += loss
             # optimize the network
             optimizer.zero_grad()
             loss.backward() # back propagation
             optimizer.step()
         if nan:
             print('total tarin accuracy: {}'.format(total_train_accurate / len(train_dataset)))
+            print('total train loss: {}'.format(total_loss))
     return net
 
 def predict(net, test_dataset, nan=False):
@@ -153,24 +142,35 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
-    trans = torchvision.transforms.Normalize(0.1307, 0.3081)
+    total_train_data, total_train_targets = train_dataset.data, train_dataset.targets
+    print(total_train_data.shape)
+
     n = len(train_dataset)
+    loss_fn = nn.CrossEntropyLoss()
     phais = np.zeros(n)
-    t = 0
+    
+    # use 90% data to compute the epsilon used for convergence
+    epsdata = total_train_data[:int(n * 0.9)]
+    print(epsdata.shape)
+    epstargets = total_train_targets[:int(n * 0.9)]
+    epsdataset = train_dataset
+    epsdataset.data = epsdata
+    epsdataset.targets = epstargets
+    print('epsilon')
+    epsnet = train(model, k, train_dataset, True)
+    outputs = predict(epsnet, test_dataset)
+    eps_score = -loss_fn(outputs, test_dataset.targets)
+
+    print('first')
     fnet = train(model, k, train_dataset, True)
+    print('second')
+    train(model, k, train_dataset, True)
     outputs = predict(fnet, test_dataset)
     outputs_orig = torch.randn(outputs.shape)
     # use loss as score
     loss_fn = nn.CrossEntropyLoss()
     total_score = -loss_fn(outputs, test_dataset.targets)
     orig_score = -loss_fn(outputs_orig, test_dataset.targets)
-
-    epsdata = trans(train_dataset.data.float()[:int(n * 0.9)])
-    epstarget = train_dataset.targets[:int(n * 0.9)]
-    epsdataset = TempDataset(epsdata, epstarget)
-    epsnet = train(model, k, epsdataset, True)
-    outputs = predict(epsnet, test_dataset)
-    eps_score = -loss_fn(outputs, test_dataset.targets)
 
     # use accuracy as score
     # orig_predict = torch.argmax(F.softmax(outputs_orig, dim=1), dim=1).detach().cpu().numpy()
@@ -180,10 +180,12 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
 
     print('total accuracy: {}'.format(accuracy_score(test_dataset.targets, y_predict)))
     print('total loss: {}'.format(total_score))
-    epsilon = float(abs(total_score - eps_score)) / 2
+    print('epsilon loss: {}'.format(eps_score))
+    epsilon = float(abs(total_score - eps_score)) / 2   # final epsilon for convergence
     print('epsilon: {}'.format(epsilon))
     record = [[0] for _ in range(n)]
 
+    t = 0
     while t < max_p * n:
         old_phais = phais.copy()
         start = time()
@@ -198,15 +200,16 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
             if total_score - vs[j - 1] <= epsilon:
                 vs[j] = vs[j - 1]
             else:
-                data = trans(train_dataset.data.float()[pai_t[:j]])
-                label = train_dataset.targets[pai_t[:j]]
-                dataset = TempDataset(data, label)
-                net = train(model, k, dataset)
+                data = total_train_data[pai_t[:j]]
+                targets = total_train_targets[pai_t[:j]]
+                train_dataset.data = data
+                train_dataset.targets = targets
+                net = train(model, k, train_dataset)
                 outputs = predict(net, test_dataset)
                 while outputs[0][0] != outputs[0][0]:
                     print(j)
                     print('NaN problem')
-                    train(model, k, dataset, True)
+                    train(model, k, train_dataset, True)
                     outputs = predict(net, test_dataset, True)
                 vs[j] = -loss_fn(outputs, test_dataset.targets)
                 # y_predict = torch.argmax(F.softmax(outputs, dim=1), 1).detach().cpu().numpy()
@@ -220,7 +223,6 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
             break
 
     return phais, fnet, record
-
 
 if __name__ == '__main__':
     trans = torchvision.transforms.Compose([

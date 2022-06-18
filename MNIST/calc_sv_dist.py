@@ -18,7 +18,7 @@ trans = torchvision.transforms.Compose([
     torchvision.transforms.Normalize(0.1307, 0.3081)
 ])
 
-train_num = 400
+train_num = 350
 
 train_dataset = MyMNIST(root='MNIST/data', train=True, transform=trans, download=True)
 test_dataset = MyMNIST(root='MNIST/data', train=False, transform=trans, download=True)
@@ -28,6 +28,8 @@ test_dataset.truncate(class_types, 300)
 
 torch.save(train_dataset, 'MNIST/calculation/train_{}.pt'.format(train_num))
 torch.save(test_dataset, 'MNIST/calculation/test.pt')
+train_dataset = torch.load('MNIST/calculation/train_{}.pt'.format(train_num))
+test_dataset = torch.load('MNIST/calculation/test.pt')
 
 model = LeNet
 sv, net, sv_it = shapley_values(model, train_dataset, test_dataset, k=len(class_types))

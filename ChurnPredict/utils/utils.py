@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 seed = 423
 np.random.seed(seed)
 
-def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-6, evaluate='ac', max_p=3):
+def shapley_values(X_train, y_train, X_test, y_test, evaluate='loss', max_p=3):
     '''
         The function is implemented based on the TMC-SV algorithm
     '''
@@ -21,18 +21,29 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-6, evaluate='ac'
     LR = LogisticRegression()
     LR.fit(X_train, y_train)
     y_predict = LR.predict(X_test)
+    epsilon_X = X_train[:(int)(0.85 * n)]
+    epsilon_y = y_train[:(int)(0.85 * n)]
+    LR.fit(epsilon_X, epsilon_y)
+    epsilon_predict = LR.predict(X_test)
     orig_X = np.array((X_mean_0, X_mean_1)) 
     # use the mean of the two types as the original model
     orig_y = np.array((0, 1))
     if evaluate == 'ac':
         total_score = accuracy_score(y_test, y_predict)
         orig_score = accuracy_score(y_test, np.zeros(len(y_test)))
+        epsilon_score = accuracy_score(y_test, epsilon_predict)
     elif evaluate == 'loss':
         total_score = -log_loss(y_test, y_predict)
         orig_score = -log_loss(y_test, np.zeros(len(y_test)))
+        epsilon_score = -log_loss(y_test, epsilon_predict)
+    
+    epsilon = abs(total_score - epsilon_score) / 8
+    print('epsilon: {}'.format(epsilon))
 
-    record_1 = [0]
+    records = [[0] for _ in range(n)]
     start = time.time() 
+
+    converge = 0
 
     while t < max_p * n:
         old_phais = phais.copy()
@@ -55,17 +66,20 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-6, evaluate='ac'
                     vs[j] = -log_loss(y_test, y_predict)
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
 
-        record_1.append(phais[1])
-        if sum(abs(old_phais - phais) < 1e-4) == n:
-            break
-        if t % 50 == 0:
-            end = time.time()
-            print('iteration {}, converge {}, time cost {}'.format(t, sum(abs(old_phais - phais) < 1e-4), end - start))
+        for i in range(n):
+            records[i].append(phais[i])
+        if sum(abs(old_phais - phais) < epsilon / 60) - sum(phais == 0) == n:
+            converge += 1
+            if converge == 30:
+                break
+       
+        end = time.time()
+        print('iteration {}, converge {}({} remains 0), time cost {}'.format(t, sum(abs(old_phais - phais) < epsilon / 60), sum(phais == 0), end - start))
 
-    print(sum(abs(old_phais - phais) < 1e-3))
-    return phais, np.array(record_1)
+    print(sum(abs(old_phais - phais) < epsilon / 60))
+    return phais, np.array(records)
 
-def load_churn_data():
+def load_churn_data(refine=0):
     telecom = pd.read_csv('ChurnPredict\WA_Fn-UseC_-Telco-Customer-Churn.csv')   
     print(telecom.info())
 
@@ -136,11 +150,27 @@ def load_churn_data():
 
     X = telecom.drop(['Churn', 'customerID'], axis=1)
     y = telecom['Churn']
+    if refine != 0:
+        # under refine, set No(data labeled 0) = [1 or 2] * No(data labeled 1)
+        # with out refine there are 3624 data points labeled 0, 1298 labeled 1 in 
+        # the X_train and 1539 data points labeled 1, 571 labeled 1 in X_test
+        if refine > 2:
+            refine = 2
+        label_num = sum(y == 1) * refine
+        X_1 = X[y == 1]
+        y_1 = y[y == 1]
+        label_0_idx = np.arange(len(X))[y == 0]
+        shuffle_idx = np.random.permutation(label_0_idx)[:label_num]
+        X_0 = X.iloc[shuffle_idx, :]
+        y_0 = y.iloc[shuffle_idx]
+        X = pd.concat((X_0, X_1))
+        y = pd.concat((y_1, y_0))
+        
     X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.7, random_state=110810)
     # scale the continuous features
     scaler = StandardScaler()
     scaler.fit(X_train[['tenure', 'MonthlyCharges', 'TotalCharges']])
     X_train[['tenure', 'MonthlyCharges', 'TotalCharges']] = scaler.transform(X_train[['tenure', 'MonthlyCharges', 'TotalCharges']])
     X_test[['tenure', 'MonthlyCharges', 'TotalCharges']] = scaler.transform(X_test[['tenure', 'MonthlyCharges', 'TotalCharges']])
-
+     
     return X_train.values, X_test.values, y_train.values, y_test.values

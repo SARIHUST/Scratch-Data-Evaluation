@@ -7,8 +7,10 @@ from sklearn.decomposition import PCA
 from utils.utils import shapley_values, load_churn_data
 
 X_train, X_test, y_train, y_test = load_churn_data()
-X_train = X_train[:400]
-y_train = y_train[:400]
+
+train_num = 800
+X_train = X_train[:train_num]
+y_train = y_train[:train_num]
 # first model using all the features
 LR = LogisticRegression(max_iter=1000)
 LR.fit(X_train, y_train)
@@ -29,22 +31,12 @@ print(log_loss(y_test, y_predict))
 
 # compute the distance
 show_num = 100
-calc_num = len(X_train)
-# calc_num = 500
 
 w = LRPCA.coef_
 b = LRPCA.intercept_
 dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
 dist /= np.linalg.norm(w)
-np.save('./ChurnPredict/dist_{}'.format(calc_num), dist)
-
-# compute shapley values
-svs, sv_it = shapley_values(X_train[:calc_num], y_train[:calc_num], X_test, y_test, evaluate='loss', max_p=10)
-np.save('ChurnPredict/svs_{}'.format(calc_num), svs)
-np.save('ChurnPredict/sv_it_{}'.format(calc_num), sv_it)
-
-svs = np.load('ChurnPredict/svs_{}.npy'.format(calc_num))[:show_num]
-sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(calc_num))
+np.save('./ChurnPredict/dist_{}'.format(train_num), dist)
 
 # compute LOO distance change
 loo_dist = np.zeros(len(X_train))
@@ -62,8 +54,16 @@ for i in range(len(X_train)):
     dist_i /= np.linalg.norm(w)
     loo_dist[i] = abs(dist[i] - dist_i)
 
-np.save('ChurnPredict/delta_dist_{}'.format(calc_num), loo_dist)
-loo_dist = np.load('ChurnPredict/delta_dist.npy')
+np.save('ChurnPredict/delta_dist_{}'.format(train_num), loo_dist)
+loo_dist = np.load('ChurnPredict/delta_dist_{}.npy'.format(train_num))
+
+# compute shapley values
+svs, sv_it = shapley_values(X_train[:train_num], y_train[:train_num], X_test, y_test, evaluate='loss', max_p=10)
+np.save('ChurnPredict/svs_{}'.format(train_num), svs)
+np.save('ChurnPredict/sv_it_{}'.format(train_num), sv_it)
+
+svs = np.load('ChurnPredict/svs_{}.npy'.format(train_num))[:show_num]
+sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(train_num))
 
 # show distance
 idx = np.arange(1, show_num + 1)
