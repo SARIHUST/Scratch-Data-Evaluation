@@ -27,7 +27,7 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='los
         total_score = -log_loss(y_test, y_predict)
         orig_score = -log_loss(y_test, np.zeros(len(y_test)))
 
-    record_1 = [0]
+    records = [[0] for _ in range(n)]
        
     while t < max_p * n:
         old_phais = phais.copy()
@@ -50,9 +50,10 @@ def shapley_values(X_train, y_train, X_test, y_test, epsilon=1e-8, evaluate='los
                     vs[j] = -log_loss(y_test, y_predict)
             phais[idx] = phais[idx] * (t - 1) / t + (vs[j] - vs[j - 1]) / t
 
-        record_1.append(phais[1])
+        for i in range(n):
+            records[i].append(phais[i])
         if t > n and sum(abs(old_phais - phais) < 1e-3) == n:
             break
 
     print(sum(abs(old_phais - phais) < 1e-3))
-    return phais, np.array(record_1)
+    return phais, np.array(records)

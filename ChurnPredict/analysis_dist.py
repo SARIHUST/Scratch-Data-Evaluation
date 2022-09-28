@@ -21,11 +21,11 @@ print('all data points loss: {}'.format(log_loss(y_test, y_predict)))
 # compute distance to the border for each data point
 w = classifier.coef_
 b = classifier.intercept_
-dist = np.array([abs(np.dot(w, x) + b) for x in X_train_all])
+dist = np.array([abs(np.dot(w, x) + b).item() for x in X_train_all])
 dist /= np.linalg.norm(w)
 
 # show the difference using different groups
-groups = 10
+groups = 6
 
 rank_dist = np.argsort(dist.flatten())
 dist_idxs = []
@@ -42,21 +42,21 @@ for i, idx in enumerate(dist_idxs):
     print('dist{} data points loss: {}'.format(i, log_loss(y_test, y_predict)))
     print('dist{} 0-labeled: {}, 1-labeled: {}'.format(i, sum(yi == 0), sum(yi == 1)))
 
-# delta_dist = np.zeros(num)
-# for i in range(num):
-#     if i % 1000 == 0:
-#         print('computing on {}'.format(i))
-#     x = X_train_all[i]
-#     X_ = np.vstack((X_train_all[:i], X_train_all[i + 1:]))
-#     y_ = np.hstack((y_train[:i], y_train[i + 1:]))
-#     LR = LogisticRegression()
-#     LR.fit(X_, y_)
-#     w = LR.coef_
-#     b = LR.intercept_
-#     dist_i = abs(np.dot(w, x) + b)
-#     dist_i /= np.linalg.norm(w)
-#     delta_dist[i] = abs(dist[i] - dist_i)
-# np.save('./ChurnPredict/delta_dist', delta_dist)
+delta_dist = np.zeros(num)
+for i in range(num):
+    if i % 1000 == 0:
+        print('computing on {}'.format(i))
+    x = X_train_all[i]
+    X_ = np.vstack((X_train_all[:i], X_train_all[i + 1:]))
+    y_ = np.hstack((y_train[:i], y_train[i + 1:]))
+    LR = LogisticRegression()
+    LR.fit(X_, y_)
+    w = LR.coef_
+    b = LR.intercept_
+    dist_i = abs(np.dot(w, x) + b)
+    dist_i /= np.linalg.norm(w)
+    delta_dist[i] = abs(dist[i] - dist_i)
+np.save('./ChurnPredict/delta_dist', delta_dist)
 
 delta_dist = np.load('./ChurnPredict/delta_dist.npy')
 rank_delta_dist = np.argsort(delta_dist.flatten())
@@ -76,7 +76,16 @@ for i, idx in enumerate(delta_dist_idxs):
 
 for d in dist_idxs:
     for dd in delta_dist_idxs:                                                                                   
-        print(sum(np.in1d(d, dd)))
+        print(sum(np.in1d(d, dd)), end=' ')
+    print()
+
+mat = np.vstack((dist, delta_dist))
+print(mat)
+rho = np.corrcoef(mat)
+print(rho)
+
+cov = np.cov(mat)
+print(cov)
 
 exit()
 # visualize the relation between distance and delta distance

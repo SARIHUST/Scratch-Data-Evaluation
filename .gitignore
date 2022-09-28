@@ -1,2 +1,5 @@
 /MNIST/data
 /MNIST/model
+/MNIST/plot
+/MNIST/calculation/*.pt
+/*/__pycache__

@@ -34,7 +34,7 @@ show_num = 100
 
 w = LRPCA.coef_
 b = LRPCA.intercept_
-dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
+dist = np.array([abs(np.dot(w, x) + b).item() for x in X_train])
 dist /= np.linalg.norm(w)
 np.save('./ChurnPredict/dist_{}'.format(train_num), dist)
 
@@ -59,77 +59,105 @@ loo_dist = np.load('ChurnPredict/delta_dist_{}.npy'.format(train_num))
 
 # compute shapley values
 svs, sv_it = shapley_values(X_train[:train_num], y_train[:train_num], X_test, y_test, evaluate='loss', max_p=10)
-np.save('ChurnPredict/svs_{}'.format(train_num), svs)
-np.save('ChurnPredict/sv_it_{}'.format(train_num), sv_it)
+np.save('ChurnPredict/7-5svs_{}'.format(train_num), svs)
+np.save('ChurnPredict/7-5sv_it_{}'.format(train_num), sv_it)
 
-svs = np.load('ChurnPredict/svs_{}.npy'.format(train_num))[:show_num]
-sv_it = np.load('ChurnPredict/sv_it_{}.npy'.format(train_num))
+sv = np.load('ChurnPredict/7-5svs_{}.npy'.format(train_num))
+svs = sv[:show_num]
+sv_it = np.load('ChurnPredict/7-5sv_it_{}.npy'.format(train_num))
 
 # show distance
-idx = np.arange(1, show_num + 1)
-s0 = plt.scatter(idx[y_train[:show_num]==0], dist[:show_num][y_train[:show_num]==0], c='r', marker='x')
-s1 = plt.scatter(idx[y_train[:show_num]==1], dist[:show_num][y_train[:show_num]==1], c='b', marker='o')
-plt.xlabel('data points')
-plt.ylabel('distance')
-plt.title('Distance of each data point to the hyper-plane')
-plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
-plt.show()
+# idx = np.arange(1, show_num + 1)
+# s0 = plt.scatter(idx[y_train[:show_num]==0], dist[:show_num][y_train[:show_num]==0], c='r', marker='x')
+# s1 = plt.scatter(idx[y_train[:show_num]==1], dist[:show_num][y_train[:show_num]==1], c='b', marker='o')
+# plt.xlabel('data points')
+# plt.ylabel('distance')
+# plt.title('Distance of each data point to the hyper-plane')
+# plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
+# plt.show()
 
 # show shapley value
-s0 = plt.scatter(idx[y_train[:show_num]==0], svs[y_train[:show_num]==0], c='r', marker='x')
-s1 = plt.scatter(idx[y_train[:show_num]==1], svs[y_train[:show_num]==1], c='b', marker='o')
-plt.xlabel('data points')
-plt.ylabel('shapley value')
-plt.title('Shapley Values of each data point')
-plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
-plt.show()
+# s0 = plt.scatter(idx[y_train[:show_num]==0], svs[y_train[:show_num]==0], c='r', marker='x')
+# s1 = plt.scatter(idx[y_train[:show_num]==1], svs[y_train[:show_num]==1], c='b', marker='o')
+# plt.xlabel('data points')
+# plt.ylabel('shapley value')
+# plt.title('Shapley Values of each data point')
+# plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
+# plt.show()
 
 # show converge
-idx_it = np.arange(1, len(sv_it) + 1)
-plt.plot(idx_it, sv_it)
+show_cases = [83, 234, 423, 763]
+idx_it = np.arange(1, len(sv_it[0]) + 1)
+plt.subplot(2, 2, 1)
+plt.plot(idx_it, sv_it[show_cases[0]])
 plt.xlabel('iterations')
-plt.ylabel('shapley value')
+plt.ylabel('shapley value({}th)'.format(show_cases[0]))
+plt.subplot(2, 2, 2)
+plt.plot(idx_it, sv_it[show_cases[1]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[1]))
+plt.subplot(2, 2, 3)
+plt.plot(idx_it, sv_it[show_cases[2]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[2]))
+plt.subplot(2, 2, 4)
+plt.plot(idx_it, sv_it[show_cases[3]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[3]))
 plt.show()
 
 # compare shapley value and distance
-svs_ = svs / sum(svs) * 50
-dist_ = dist[:show_num] / sum(dist[:show_num]) * 100 + 2.5
-s0 = plt.scatter(idx, svs_, c='r', marker='x')
-plt.plot(idx, svs_)
-s1 = plt.scatter(idx, dist_, c='b', marker='o')
-plt.plot(idx, dist_)
-plt.xlabel('data points')
-plt.title('shapley value vs distance to border')
-plt.legend(handles=[s0, s1], labels=['sv', 'dist'])
-plt.show()
+# svs_ = svs / sum(svs) * 50
+# dist_ = dist[:show_num] / sum(dist[:show_num]) * 100 + 2.5
+# s0 = plt.scatter(idx, svs_, c='r', marker='x')
+# plt.plot(idx, svs_)
+# s1 = plt.scatter(idx, dist_, c='b', marker='o')
+# plt.plot(idx, dist_)
+# plt.xlabel('data points')
+# plt.title('shapley value vs distance to border')
+# plt.legend(handles=[s0, s1], labels=['sv', 'dist'])
+# plt.show()
 
 # show delta distance
-s0 = plt.scatter(idx, loo_dist[:show_num], c='r', marker='x')
-plt.xlabel('data points')
-plt.ylabel('delta distance')
-plt.title('Delta distance by LOO strategy')
-plt.show()
+# s0 = plt.scatter(idx, loo_dist[:show_num], c='r', marker='x')
+# plt.xlabel('data points')
+# plt.ylabel('delta distance')
+# plt.title('Delta distance by LOO strategy')
+# plt.show()
 
 # compare distance and delta distance
-dist_ = dist[:show_num] / sum(dist[:show_num]) * 50
-loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 1.5
-s0 = plt.scatter(idx, dist_, c='r', marker='x')
-plt.plot(idx, dist_[:show_num])
-s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
-plt.plot(idx, loo_dist_[:show_num])
-plt.xlabel('data points')
-plt.title('distance vs delta distance')
-plt.legend(handles=[s0, s1], labels=['dist', 'delta dist'])
-plt.show()
+# dist_ = dist[:show_num] / sum(dist[:show_num]) * 50
+# loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 1.5
+# s0 = plt.scatter(idx, dist_, c='r', marker='x')
+# plt.plot(idx, dist_[:show_num])
+# s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+# plt.plot(idx, loo_dist_[:show_num])
+# plt.xlabel('data points')
+# plt.title('distance vs delta distance')
+# plt.legend(handles=[s0, s1], labels=['dist', 'delta dist'])
+# plt.show()
 
 # compare shapley value and delta distance
-svs_ = svs / sum(svs) * 50
-loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 2.5
-s0 = plt.scatter(idx, svs_, c='r', marker='x')
-plt.plot(idx, svs_)
-s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
-plt.plot(idx, loo_dist_[:show_num])
-plt.xlabel('data points')
-plt.title('shapley value vs delta distance')
-plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
-plt.show()
+# svs_ = svs / sum(svs) * 50
+# loo_dist_ = loo_dist[:show_num] / sum(loo_dist[:show_num]) * 50 + 2.5
+# s0 = plt.scatter(idx, svs_, c='r', marker='x')
+# plt.plot(idx, svs_)
+# s1 = plt.scatter(idx, loo_dist_, c='b', marker='o')
+# plt.plot(idx, loo_dist_[:show_num])
+# plt.xlabel('data points')
+# plt.title('shapley value vs delta distance')
+# plt.legend(handles=[s0, s1], labels=['sv', 'delta dist'])
+# plt.show()
+
+# compute the pearson correlation coefficient
+print(sv.shape)
+print(dist.shape)
+print(loo_dist.shape)
+
+mat = np.vstack((sv, dist, loo_dist))
+print(mat)
+rho = np.corrcoef(mat)
+print(rho)
+
+cov = np.cov(mat)
+print(cov)

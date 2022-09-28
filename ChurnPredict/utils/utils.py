@@ -38,6 +38,7 @@ def shapley_values(X_train, y_train, X_test, y_test, evaluate='loss', max_p=3):
         epsilon_score = -log_loss(y_test, epsilon_predict)
     
     epsilon = abs(total_score - epsilon_score) / 8
+    t_epsilon = epsilon / 80
     print('epsilon: {}'.format(epsilon))
 
     records = [[0] for _ in range(n)]
@@ -68,15 +69,16 @@ def shapley_values(X_train, y_train, X_test, y_test, evaluate='loss', max_p=3):
 
         for i in range(n):
             records[i].append(phais[i])
-        if sum(abs(old_phais - phais) < epsilon / 60) - sum(phais == 0) == n:
+
+        if sum(abs(old_phais - phais) < t_epsilon) - sum(phais == 0) == n:
             converge += 1
-            if converge == 30:
+            if converge == 50:
                 break
        
         end = time.time()
-        print('iteration {}, converge {}({} remains 0), time cost {}'.format(t, sum(abs(old_phais - phais) < epsilon / 60), sum(phais == 0), end - start))
+        print('iteration {}, converge {}({} remains 0), time cost {}'.format(t, sum(abs(old_phais - phais) < t_epsilon), sum(phais == 0), end - start))
 
-    print(sum(abs(old_phais - phais) < epsilon / 60))
+    print(sum(abs(old_phais - phais) < t_epsilon))
     return phais, np.array(records)
 
 def load_churn_data(refine=0):

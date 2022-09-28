@@ -148,7 +148,19 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
     n = len(train_dataset)
     loss_fn = nn.CrossEntropyLoss()
     phais = np.zeros(n)
-    
+
+    train(model, k, train_dataset, False)
+    print('first')
+    fnet = train(model, k, train_dataset, True)
+    # print('second')
+    # train(model, k, train_dataset, True)
+    outputs = predict(fnet, test_dataset)
+    outputs_orig = torch.randn(outputs.shape)
+    # use loss as score
+    loss_fn = nn.CrossEntropyLoss()
+    total_score = -loss_fn(outputs, test_dataset.targets)
+    orig_score = -loss_fn(outputs_orig, test_dataset.targets)
+
     # use 90% data to compute the epsilon used for convergence
     epsdata = total_train_data[:int(n * 0.9)]
     print(epsdata.shape)
@@ -161,17 +173,6 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
     outputs = predict(epsnet, test_dataset)
     eps_score = -loss_fn(outputs, test_dataset.targets)
 
-    print('first')
-    fnet = train(model, k, train_dataset, True)
-    print('second')
-    train(model, k, train_dataset, True)
-    outputs = predict(fnet, test_dataset)
-    outputs_orig = torch.randn(outputs.shape)
-    # use loss as score
-    loss_fn = nn.CrossEntropyLoss()
-    total_score = -loss_fn(outputs, test_dataset.targets)
-    orig_score = -loss_fn(outputs_orig, test_dataset.targets)
-
     # use accuracy as score
     # orig_predict = torch.argmax(F.softmax(outputs_orig, dim=1), dim=1).detach().cpu().numpy()
     y_predict = torch.argmax(F.softmax(outputs, dim=1), dim=1).detach().cpu().numpy()
@@ -181,7 +182,7 @@ def shapley_values(model, train_dataset, test_dataset, k=10, max_p=2):
     print('total accuracy: {}'.format(accuracy_score(test_dataset.targets, y_predict)))
     print('total loss: {}'.format(total_score))
     print('epsilon loss: {}'.format(eps_score))
-    epsilon = float(abs(total_score - eps_score)) / 2   # final epsilon for convergence
+    epsilon = float(abs(total_score - eps_score))   # final epsilon for convergence
     print('epsilon: {}'.format(epsilon))
     record = [[0] for _ in range(n)]
 

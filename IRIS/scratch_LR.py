@@ -20,13 +20,13 @@ X = iris.data[iris.target < 2]
 y = iris.target[iris.target < 2]
 
 # show the data points of the first 2 types on the first 2 features
-# X = X[y < 2, :2]
-# y = y[y < 2]
-# plt.scatter(X[y == 0, 0], X[y == 0, 1], c='b', marker='o')
-# plt.scatter(X[y == 1, 0], X[y == 1, 1], c='r', marker='x')
-# plt.xlabel(iris.feature_names[0])
-# plt.ylabel(iris.feature_names[1])
-# plt.show()
+X = X[y < 2, :2]
+y = y[y < 2]
+plt.scatter(X[y == 0, 0], X[y == 0, 1], c='b', marker='o')
+plt.scatter(X[y == 1, 0], X[y == 1, 1], c='r', marker='x')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.show()
 
 # train the LR model
 X_train, X_test, y_train, y_test = train_test_split(X, y)
@@ -41,16 +41,18 @@ print('accuracy score: {}'.format(total_accuracy))
 print('loss score: {}'.format(total_loss))
 
 # plot the decision boundary of the LR model
-# w = np.array(LRClassifier.coef_)
-# x1 = np.arange(4, 8, step=0.1)
-# x2 = -(w[0][0] * x1 + LRClassifier.intercept_[0]) / w[0][1]
-# plt.plot(x1, x2)
-# plt.scatter(X[y == 0, 0], X[y == 0, 1], c='b', marker='o')
-# plt.scatter(X[y == 1, 0], X[y == 1, 1], c='r', marker='x')
-# plt.xlabel(iris.feature_names[0])
-# plt.ylabel(iris.feature_names[1])
-# plt.title('Decision Boundary')
-# plt.show()
+w = np.array(LRClassifier.coef_)
+x1 = np.arange(4, 8, step=0.1)
+x2 = -(w[0][0] * x1 + LRClassifier.intercept_[0]) / w[0][1]
+plt.plot(x1, x2)
+plt.scatter(X[y == 0, 0], X[y == 0, 1], c='b', marker='o')
+plt.scatter(X[y == 1, 0], X[y == 1, 1], c='r', marker='x')
+plt.xlabel(iris.feature_names[0])
+plt.ylabel(iris.feature_names[1])
+plt.title('Decision Boundary')
+plt.show()
+
+exit()
 
 # Now we try to find out the most valuable data points according to LOO strategy, Shapley Values
 # Leave One Out Strategy
@@ -88,17 +90,32 @@ plt.legend(handles=[s0, s1], labels=['type 0', 'type 1'])
 plt.show()
 
 # show the change of shapley value against the number of iterations
-idx = np.arange(1, len(sv_it) + 1)
-plt.plot(idx, sv_it)
+idx = np.arange(1, len(sv_it[0]) + 1)
+show_cases = [4, 23, 45, 67]
+
+plt.subplot(2, 2, 1)
+plt.plot(idx, sv_it[show_cases[0]])
 plt.xlabel('iterations')
-plt.ylabel('shapley value')
+plt.ylabel('shapley value({}th)'.format(show_cases[0]))
+plt.subplot(2, 2, 2)
+plt.plot(idx, sv_it[show_cases[1]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[1]))
+plt.subplot(2, 2, 3)
+plt.plot(idx, sv_it[show_cases[2]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[2]))
+plt.subplot(2, 2, 4)
+plt.plot(idx, sv_it[show_cases[3]])
+plt.xlabel('iterations')
+plt.ylabel('shapley value({}th)'.format(show_cases[3]))
 plt.show()
 
 # Compute the distance of the training data points to the decision boundary
 w = LRClassifier.coef_
 b = LRClassifier.intercept_
 
-dist = np.array([abs(np.dot(w, x) + b) for x in X_train])
+dist = np.array([abs(np.dot(w, x) + b).item() for x in X_train])
 dist /= np.linalg.norm(w)
 print(dist)
 idx = np.arange(1, len(dist) + 1)
@@ -172,3 +189,12 @@ plt.show()
 # This figure shows that the data points that are closer to the decision boundary has an impact
 # on the boundary that is larger than those that are further. However when considered with the 
 # shapley value, no relationship can be seen directly.
+
+# compute the pearson correlation coefficient
+mat = np.vstack((svs, dist, loo_dist))
+print(mat)
+rho = np.corrcoef(mat)
+print(rho)
+
+cov = np.cov(mat)
+print(cov)
